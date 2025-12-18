@@ -26,5 +26,20 @@ This tool was designed with some principles in mind to make sure it is fit for p
 
 ### Architecture
 
-  - Postgres, FastAPI Backend
-  - Typescript, next.js frontend
+  - FastAPI Backend (Python 3.10+)
+  - Qualys SDK (`qualysdk`) for API integration
+  - `uv` for Python package management
+  - React (Vite) frontend with Typescript and Tailwind CSS
+
+## Getting Started
+
+### Backend Setup
+1. Install `uv`: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+2. Navigate to the `backend` directory.
+3. Run the server: `uv run uvicorn main:app --reload`
+
+### Frontend Setup
+1. Navigate to the `frontend_src` directory.
+2. Install dependencies: `npm install`
+3. Run the development server: `npm run dev`
+4. (Optional) Run the backend from the frontend directory: `npm run server`

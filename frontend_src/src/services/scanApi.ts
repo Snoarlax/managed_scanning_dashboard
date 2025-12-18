@@ -1,12 +1,12 @@
 import { Scan, Vulnerability } from '@/types/scan';
 
-// Placeholder API configuration
-const API_BASE_URL = 'https://api.your-scanning-vendor.example.com';
+// Point to the local FastAPI server
+const API_BASE_URL = 'http://localhost:8000';
 const API_VERSION = 'v1';
 
 /**
  * Extensible API service for scan data
- * Replace the base URL and modify endpoints as needed for your actual API
+ * Communicates with the Python FastAPI backend
  */
 class ScanApiService {
   private baseUrl: string;
@@ -17,7 +17,6 @@ class ScanApiService {
 
   /**
    * Fetch all scans from the API
-   * Modify this method to match your actual API response structure
    */
   async fetchScans(): Promise<Scan[]> {
     try {
@@ -25,8 +24,6 @@ class ScanApiService {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          // Add your authentication headers here
-          // 'Authorization': `Bearer ${your_token}`,
         },
       });
 
@@ -35,23 +32,18 @@ class ScanApiService {
       }
 
       const data = await response.json();
-      
-      // Transform API response to match our Scan interface
-      // Modify this mapping based on your actual API response structure
       return this.transformApiResponse(data);
     } catch (error) {
       console.error('Error fetching scans:', error);
-      // Return mock data for development
+      // Return mock data for development if backend is unreachable
       return this.getMockScans();
     }
   }
 
   /**
    * Transform API response to match our internal Scan interface
-   * Customize this based on your API's response structure
    */
   private transformApiResponse(apiData: any): Scan[] {
-    // Example transformation - adjust based on your API structure
     if (Array.isArray(apiData)) {
       return apiData.map((item: any) => ({
         id: item.id || item.scan_id,
@@ -103,7 +95,6 @@ class ScanApiService {
       return this.transformApiResponse([data])[0] || null;
     } catch (error) {
       console.error('Error fetching scan:', error);
-      // Return mock data for development
       return this.getMockScans().find((scan) => scan.id === id) || null;
     }
   }

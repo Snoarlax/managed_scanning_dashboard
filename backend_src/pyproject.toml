@@ -1,0 +1,20 @@
+[project]
+name = "qualys-backend"
+version = "0.1.0"
+description = "FastAPI backend for Qualys integration"
+readme = "README.md"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "python-dotenv",
+    "pydantic",
+    "requests",
+    "qualysdk",
+  #"qualysdk @ git+https://github.com/snoarlax/qualysdk.git",
+]
+
+[tool.uv]
+dev-dependencies = []
+
+[tool.uv.sources]
+qualysdk = { path = "/home/snoarlax/Documents/git-repos/qualysdk", editable = true }
