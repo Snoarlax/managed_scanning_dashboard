@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from typing import List, Optional, Dict, Any
 import os
@@ -7,8 +7,10 @@ from qualysdk.auth import BasicAuth
 import qualysdk.was as qualys
 from models import Scan, Asset, AssetDetail, VulnerabilityCounts
 from dataclasses import asdict
-# TODO: add response models in signature 
-#
+from sqlalchemy.orm import Session
+from db import get_db, DBScan, DBAsset
+
+# TODO: refresh endpoint to create a refresh job for all data in database
 QUALYS_CREDENTIALS = {
     "username":os.getenv("QUALYS_USERNAME"),
     "password":os.getenv("QUALYS_PASSWORD"),
@@ -97,11 +99,19 @@ async def configure_qualys(username: str, password: str):
     return {"status": "success", "message": "Qualys configuration updated"}
 
 @app.get("/v1/scans", response_model=List[Scan])
-async def get_scans(limit: int = 100):
+async def get_scans(limit: int = 100, db: Session = Depends(get_db)):
+    # Try fetching from DB first, ordered by most recent
+    db_scans = db.query(DBScan).order_by(DBScan.scanDate.desc()).limit(limit).all()
+    
+    if db_scans:
+        return [Scan.model_validate(s) for s in db_scans]
+
+    # If no results in DB, fetch from Qualys API
     qualys_scans = qualys.get_scans(auth=qualys_auth, page_count=math.ceil(limit/100))
     
     if not qualys_scans:
         # Return mock data if SDK returns nothing (stubs) or if not configured
+        # We don't store mock data in the DB
         return [
             Scan.model_validate({
                 "id": "1",
@@ -119,28 +129,51 @@ async def get_scans(limit: int = 100):
         ]
 
     scans: List[Scan] = []
-    for scan in qualys_scans:
-        scans.append(convert_qualys_scan_to_scan(scan))
-
+    for qs in qualys_scans:
+        scan_obj = convert_qualys_scan_to_scan(qs)
+        # Store in DB
+        db_scan = DBScan(**scan_obj.model_dump())
+        db.merge(db_scan)
+        scans.append(scan_obj)
+    
+    db.commit()
+    # Return sorted by date
+    scans.sort(key=lambda x: x.scanDate, reverse=True)
     return scans[:limit]
 
 @app.get("/v1/scans/{scan_id}", response_model=Scan)
-async def get_scan(scan_id: str):
-    scan = qualys.get_scans_verbose(auth=qualys_auth, id=scan_id)
-    if not scan:
-        # Fallback to mock search
-        #scans = await get_scans_verbose()
-        #found = next((s for s in scans if s["id"] == scan_id), None)
-        if not found:
-            raise HTTPException(status_code=404, detail="Scan not found")
-        return found
-    return convert_qualys_scan_to_scan(scan[0])
+async def get_scan(scan_id: str, db: Session = Depends(get_db)):
+    # Try DB first
+    db_scan = db.query(DBScan).filter(DBScan.id == scan_id).first()
+    if db_scan:
+        return Scan.model_validate(db_scan)
+
+    # Fetch from API
+    qualys_result = qualys.get_scans_verbose(auth=qualys_auth, id=scan_id)
+    if not qualys_result:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    
+    scan_obj = convert_qualys_scan_to_scan(qualys_result[0])
+    
+    # Store in DB
+    db_scan = DBScan(**scan_obj.model_dump())
+    db.merge(db_scan)
+    db.commit()
+    
+    return scan_obj
 
 @app.get("/v1/assets", response_model=List[Asset])
-async def get_assets(limit: int = 100):
+async def get_assets(limit: int = 100, db: Session = Depends(get_db)):
+    # Try DB first, ordered by most recent
+    db_assets = db.query(DBAsset).order_by(DBAsset.lastScanned.desc()).limit(limit).all()
+    
+    if db_assets:
+        return [Asset.model_validate(a) for a in db_assets]
+
+    # Fetch from API
     qualys_assets = qualys.get_webapps(auth=qualys_auth, page_count=math.ceil(limit/100))
     if not qualys_assets:
-        # Return mock data if SDK returns nothing (stubs) or if not configured
+        # Return mock data
         return [
             {
                 "id": "asset-1",
@@ -148,7 +181,7 @@ async def get_assets(limit: int = 100):
                 "uri": "https://app.example.com",
                 "client": "Acme Corporation",
                 "totalScans": 3,
-                "lastScanned": "Nov 23, 2025",
+                "lastScanned": "2025-11-23T14:30:00Z",
                 "vulnerabilities": {"critical": 3, "high": 12, "medium": 28, "low": 15, "informational": 42},
                 "newVulnerabilities": {"critical": 1, "high": 3, "medium": 5, "low": 2, "informational": 8},
                 "tags": ["production", "web", "critical"]
@@ -156,19 +189,38 @@ async def get_assets(limit: int = 100):
         ]
 
     assets: List[Asset] = []
-    for asset in qualys_assets:
-        assets.append(convert_qualys_asset_to_asset(asset))
+    for qa in qualys_assets:
+        asset_obj = convert_qualys_asset_to_asset(qa)
+        # Store in DB
+        db_asset = DBAsset(**asset_obj.model_dump())
+        db.merge(db_asset)
+        assets.append(asset_obj)
+    
+    db.commit()
+    # Return sorted by date
+    assets.sort(key=lambda x: x.lastScanned, reverse=True)
     return assets[:limit]
 
 @app.get("/v1/assets/{asset_id}", response_model=Asset)
-async def get_asset_detail(asset_id: str):
-    qualys_asset = qualys.get_webapps(auth=qualys_auth, id=asset_id)
-    if not qualys_asset:
+async def get_asset_detail(asset_id: str, db: Session = Depends(get_db)):
+    # Try DB first
+    db_asset = db.query(DBAsset).filter(DBAsset.id == asset_id).first()
+    if db_asset:
+        return Asset.model_validate(db_asset)
+
+    # Fetch from API
+    qualys_result = qualys.get_webapps(auth=qualys_auth, id=asset_id)
+    if not qualys_result:
         raise HTTPException(status_code=404, detail="Asset not found")
     
-    #scans = await get_scans_verbose()
-    #asset["scans"] = [s for s in scans if s["assetId"] == asset_id]
-    return convert_qualys_asset_to_asset(qualys_asset[0])
+    asset_obj = convert_qualys_asset_to_asset(qualys_result[0])
+    
+    # Store in DB
+    db_asset = DBAsset(**asset_obj.model_dump())
+    db.merge(db_asset)
+    db.commit()
+    
+    return asset_obj
 
 if __name__ == "__main__":
     import uvicorn

@@ -9,12 +9,12 @@ dependencies = [
     "python-dotenv",
     "pydantic",
     "requests",
-    "qualysdk",
-  #"qualysdk @ git+https://github.com/snoarlax/qualysdk.git",
+  #"qualysdk",
+    "qualysdk @ git+https://github.com/snoarlax/qualysdk.git",
 ]
 
 [tool.uv]
 dev-dependencies = []
 
 [tool.uv.sources]
-qualysdk = { path = "/home/snoarlax/Documents/git-repos/qualysdk", editable = true }
+#qualysdk = { path = "/home/snoarlax/Documents/git-repos/qualysdk", editable = true }

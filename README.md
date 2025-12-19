@@ -34,9 +34,11 @@ This tool was designed with some principles in mind to make sure it is fit for p
 ## Getting Started
 
 ### Backend Setup
-1. Install `uv`: `curl -LsSf https://astral.sh/uv/install.sh | sh`
-2. Navigate to the `backend` directory.
-3. Run the server: `uv run uvicorn main:app --reload`
+## Using Docker (RECOMMENDED)
+1. export the following environment variables: QUALYS_USERNAME, QUALYS_PASSWORD, QUALYS_REGION
+2. Go to the ./backend_src/ directory and run docker-compose: docker-compose up --build
+(I have to run it with sudo on my system, sudo -E docker-compose up --build)
+
 
 ### Frontend Setup
 1. Navigate to the `frontend_src` directory.
